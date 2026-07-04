@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}داشبورد | Hate Kadeh{% endblock %}
+{% block page_title %}داشبورد مدیریت{% endblock %}
+{% block content %}
+<section class="hero-panel">
+    <div>
+        <span class="eyebrow">وضعیت زنده</span>
+        <h2>خلاصه‌ی جریان پیام و پاسخ</h2>
+        <p>از همین‌جا می‌توانی وضعیت تایید، صف پاسخ‌ها و آخرین فعالیت‌ها را در یک نگاه ببینی.</p>
+    </div>
+    <div class="hero-meta">
+        <span>ادمین: {{ admin_id }}</span>
+        <span>سشن زمان‌دار</span>
+        <span>رمزنگاری فعال</span>
+    </div>
+</section>
+
+<section class="stats-grid">
+    <article class="stat-card accent-pending">
+        <span class="stat-label">در انتظار تایید</span>
+        <strong class="stat-number">{{ total_pending }}</strong>
+    </article>
+    <article class="stat-card accent-approved">
+        <span class="stat-label">تایید شده</span>
+        <strong class="stat-number">{{ total_approved }}</strong>
+    </article>
+    <article class="stat-card accent-users">
+        <span class="stat-label">کل کاربران</span>
+        <strong class="stat-number">{{ total_users }}</strong>
+    </article>
+    <article class="stat-card accent-replies">
+        <span class="stat-label">پاسخ در انتظار</span>
+        <strong class="stat-number">{{ pending_replies }}</strong>
+    </article>
+</section>
+
+<section class="action-row">
+    <a href="/pending" class="pill-btn danger">📥 پیام‌های در انتظار</a>
+    <a href="/approved" class="pill-btn success">✅ پیام‌های منتشرشده</a>
+    <a href="/replies" class="pill-btn info">💬 مدیریت پاسخ‌ها</a>
+</section>
+
+<section class="panel-card">
+    <div class="section-head">
+        <div>
+            <span class="eyebrow">آخرین فعالیت</span>
+            <h3>جدیدترین پیام‌ها</h3>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="clean-table">
+            <thead>
+                <tr>
+                    <th>آیدی</th>
+                    <th>فرستنده</th>
+                    <th>متن خلاصه</th>
+                    <th>زمان</th>
+                    <th>وضعیت</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in recent_messages %}
+                <tr>
+                    <td>#{{ msg.id }}</td>
+                    <td><code dir="ltr">{{ msg.sender_id }}</code></td>
+                    <td>{{ msg.message_text[:70] }}{% if msg.message_text|length > 70 %}...{% endif %}</td>
+                    <td>{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{% if msg.is_approved %}<span class="badge ok">تایید شده</span>{% else %}<span class="badge wait">در انتظار</span>{% endif %}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="empty-state">پیامی برای نمایش وجود ندارد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}پیام‌های تایید نشده | Hate Kadeh{% endblock %}
+{% block page_title %}پیام‌های در انتظار تایید{% endblock %}
+{% block content %}
+<section class="panel-card">
+    <div class="section-head compact">
+        <div>
+            <span class="eyebrow">ورود به صف</span>
+            <h3>مدیریت پیام‌های تایید نشده</h3>
+        </div>
+        <input type="text" id="searchPending" class="search-input" placeholder="جستجو در متن یا فرستنده..." onkeyup="filterTable('searchPending', 'pendingTable')">
+    </div>
+    <div class="table-wrap">
+        <table class="clean-table" id="pendingTable">
+            <thead>
+                <tr>
+                    <th>آیدی</th>
+                    <th>فرستنده</th>
+                    <th>متن پیام</th>
+                    <th>نوع</th>
+                    <th>زمان</th>
+                    <th>عملیات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in messages %}
+                <tr>
+                    <td>#{{ msg.id }}</td>
+                    <td><code dir="ltr">{{ msg.sender_id or "-" }}</code></td>
+                    <td>{{ msg.message_text|default('')|truncate(120) }}</td>
+                    <td><span class="badge neutral">{{ msg.message_type }}</span></td>
+                    <td>{% if msg.created_at %}{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                    <td>
+                        <button class="icon-btn success" onclick="approveMessage({{ msg.id }}, this)">✅ تایید</button>
+                        <button class="icon-btn danger" onclick="rejectMessage({{ msg.id }}, this)">❌ رد</button>
+                        {% if request is defined %}
+                        <a class="icon-btn info" href="{{ request.url_for('message_detail', msg_id=msg.id) }}">🔍 جزئیات</a>
+                        {% else %}
+                        <a class="icon-btn info" href="/message/{{ msg.id }}">🔍 جزئیات</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="empty-state">هیچ پیام تایید نشده‌ای وجود ندارد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

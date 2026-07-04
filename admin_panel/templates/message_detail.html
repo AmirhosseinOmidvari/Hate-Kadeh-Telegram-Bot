@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}جزئیات پیام #{{ msg.id }}{% endblock %}
+{% block page_title %}جزئیات پیام #{{ msg.id }}{% endblock %}
+{% block content %}
+<section class="panel-card detail-grid">
+    <div class="detail-header">
+        <div>
+            <span class="eyebrow">مرور کامل</span>
+            <h3>جزئیات پیام ناشناس</h3>
+        </div>
+        <a href="javascript:history.back()" class="chip-link">بازگشت</a>
+    </div>
+    <div class="detail-body">
+        <div class="detail-meta">
+            <div><span>آیدی پیام</span><strong>#{{ msg.id }}</strong></div>
+            <div><span>فرستنده</span><code dir="ltr">{{ msg.sender_id }}</code></div>
+            <div><span>نوع</span><strong>{{ msg.message_type }}</strong></div>
+            <div><span>زمان ارسال</span><strong>{{ msg.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</strong></div>
+            <div><span>وضعیت</span><strong>{% if msg.is_approved %}تایید شده{% else %}در انتظار تایید{% endif %}</strong></div>
+            {% if msg.file_id %}
+            <div><span>file_id</span><code dir="ltr">{{ msg.file_id }}</code></div>
+            {% endif %}
+            {% if msg.is_approved %}
+            <div><span>تاییدکننده</span><code dir="ltr">{{ msg.approved_by }}</code></div>
+            <div><span>زمان تایید</span><strong>{{ msg.approved_at }}</strong></div>
+            {% endif %}
+        </div>
+        <div class="detail-content">
+            <span class="eyebrow">متن کامل</span>
+            <div class="message-box">{{ msg.message_text }}</div>
+            {% if not msg.is_approved %}
+            <div class="action-row compact-actions">
+                <button class="pill-btn success" onclick="approveMessage({{ msg.id }}, this)">✅ تایید پیام</button>
+                <button class="pill-btn danger" onclick="rejectMessage({{ msg.id }}, this)">❌ حذف پیام</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

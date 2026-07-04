@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}مدیریت پاسخ‌ها | Hate Kadeh{% endblock %}
+{% block page_title %}مدیریت پاسخ‌های کاربران{% endblock %}
+{% block content %}
+<section class="panel-card">
+    <div class="section-head compact">
+        <div>
+            <span class="eyebrow">صف تایید پاسخ</span>
+            <h3>پاسخ‌های کاربران به پیام‌ها</h3>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="clean-table">
+            <thead>
+                <tr>
+                    <th>آیدی پاسخ</th>
+                    <th>کاربر پاسخ‌دهنده</th>
+                    <th>متن پاسخ</th>
+                    <th>نوع</th>
+                    <th>زمان</th>
+                    <th>وضعیت</th>
+                    <th>عملیات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in replies %}
+                <tr>
+                    <td>#{{ r.id }}</td>
+                    <td><code dir="ltr">{{ r.replier_id }}</code></td>
+                    <td>{{ r.reply_text[:80] }}{% if r.reply_text|length > 80 %}...{% endif %}</td>
+                    <td><span class="badge neutral">{{ r.reply_type }}</span></td>
+                    <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{% if r.is_approved %}<span class="badge ok">تایید</span>{% else %}<span class="badge wait">در انتظار</span>{% endif %}</td>
+                    <td>
+                        {% if not r.is_approved %}
+                        <button class="icon-btn success" onclick="approveReply({{ r.id }})">تایید پاسخ</button>
+                        {% endif %}
+                        <button class="icon-btn danger" onclick="rejectReply({{ r.id }})">حذف</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="empty-state">هیچ پاسخی یافت نشد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

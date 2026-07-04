@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>{% block title %}پنل مدیریت{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="app-body">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand-block">
+                <div class="brand-mark">HK</div>
+                <div>
+                    <div class="brand-title">Hate Kadeh</div>
+                    <div class="brand-subtitle">Anonymous moderation console</div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard" class="nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">داشبورد</a>
+                <a href="/pending" class="nav-item {% if request.url.path == '/pending' %}active{% endif %}">پیام‌های در انتظار</a>
+                <a href="/approved" class="nav-item {% if request.url.path == '/approved' %}active{% endif %}">پیام‌های منتشرشده</a>
+                <a href="/replies" class="nav-item {% if request.url.path == '/replies' %}active{% endif %}">پاسخ‌ها</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span>امنیت فعال</span>
+                <span>سشن زمان‌دار</span>
+            </div>
+        </aside>
+        <div class="app-main">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">پنل مدیریت</p>
+                    <h1>{% block page_title %}مدیریت محتوا{% endblock %}</h1>
+                </div>
+                <div class="topbar-actions">
+                    <a class="chip-link" href="/dashboard">بازگشت سریع</a>
+                    <a class="chip-link danger" href="/logout">خروج</a>
+                </div>
+            </header>
+            <main id="root" class="content-area">{% block content %}{% endblock %}</main>
+        </div>
+    </div>
+    <div id="toastHost" class="toast-host" aria-live="polite"></div>
+    <script src="/static/script.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

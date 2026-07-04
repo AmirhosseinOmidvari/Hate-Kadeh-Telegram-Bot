@@ -1,0 +1,12 @@
+python-telegram-bot[asyncio]>=20.0
+fastapi
+sqlalchemy
+python-dotenv
+cryptography
+uvicorn
+jinja2
+passlib
+starlette
+prometheus_client
+locust
+python-multipart

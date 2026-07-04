@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>ورود | پنل مدیریت</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-body">
+<main class="auth-shell">
+    <section class="auth-hero">
+        <span class="eyebrow">Hate Kadeh Control Room</span>
+        <h1>ورود امن به پنل مدیریت</h1>
+        <p>صف پیام‌های ناشناس، پاسخ‌ها و تاییدها را در یک داشبورد سریع، تیره و تمیز مدیریت کن.</p>
+        <div class="hero-pills">
+            <span>سشن زمان‌دار</span>
+            <span>کوکی امن</span>
+            <span>رابط واکنش‌گرا</span>
+        </div>
+    </section>
+    <form method="post" action="/login" class="auth-card">
+        <h2>ورود ادمین</h2>
+        <p class="auth-note">User ID عددی و رمز پنل را وارد کن.</p>
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+        <label class="field">
+            <span>آیدی عددی</span>
+            <input type="text" name="username" inputmode="numeric" autocomplete="off" placeholder="123456789" required>
+        </label>
+        <label class="field">
+            <span>رمز عبور</span>
+            <input type="password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+        </label>
+        <button class="primary-btn" type="submit">ورود به پنل</button>
+    </form>
+</main>
+</body>
+</html>

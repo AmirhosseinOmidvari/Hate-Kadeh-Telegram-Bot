@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}پیام‌های منتشرشده | Hate Kadeh{% endblock %}
+{% block page_title %}پیام‌های منتشرشده در کانال{% endblock %}
+{% block content %}
+<section class="panel-card">
+    <div class="section-head compact">
+        <div>
+            <span class="eyebrow">آرشیو تایید</span>
+            <h3>پیام‌های منتشر شده</h3>
+        </div>
+        <input type="text" id="searchApproved" class="search-input" placeholder="جستجو..." onkeyup="filterTable('searchApproved', 'approvedTable')">
+    </div>
+    <div class="table-wrap">
+        <table class="clean-table" id="approvedTable">
+            <thead>
+                <tr>
+                    <th>آیدی</th>
+                    <th>فرستنده</th>
+                    <th>متن</th>
+                    <th>تاریخ تایید</th>
+                    <th>تاییدکننده</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in messages %}
+                <tr>
+                    <td>#{{ msg.id }}</td>
+                    <td><code dir="ltr">{{ msg.sender_id }}</code></td>
+                    <td>{{ msg.message_text[:90] }}{% if msg.message_text|length > 90 %}...{% endif %}</td>
+                    <td>{{ msg.approved_at.strftime('%Y-%m-%d %H:%M') if msg.approved_at else '-' }}</td>
+                    <td><code dir="ltr">{{ msg.approved_by }}</code></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="empty-state">پیام تایید شده‌ای وجود ندارد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

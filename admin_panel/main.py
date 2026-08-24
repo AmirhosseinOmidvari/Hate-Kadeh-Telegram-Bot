@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request, Form, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -15,6 +15,7 @@ from bot.database import run_db_task
 from bot.utils import now_tehran
 from bot.security import decrypt_value
 import secrets
+from hashlib import sha256
 from bot.utils import logger
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Histogram
 
@@ -52,25 +53,43 @@ sessions = {}
 login_attempts = {}
 
 
+UTCNOW = lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+_bot_instance: Bot | None = None
+
+
 def _bot() -> Bot:
-    return Bot(token=Config.BOT_TOKEN)
+    global _bot_instance
+    if _bot_instance is None:
+        _bot_instance = Bot(token=Config.BOT_TOKEN)
+    return _bot_instance
 
 
 def _create_session(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
     sessions[token] = {
         "user_id": user_id,
-        "created_at": datetime.utcnow(),
+        "created_at": UTCNOW(),
     }
     return token
 
 
 def _session_is_expired(created_at: datetime) -> bool:
-    return datetime.utcnow() - created_at > timedelta(seconds=Config.SESSION_TTL_SECONDS)
+    return UTCNOW() - created_at > timedelta(seconds=Config.SESSION_TTL_SECONDS)
+
+
+def _prune_sessions() -> None:
+    expired = [
+        token for token, data in sessions.items()
+        if _session_is_expired(data["created_at"])
+    ]
+    for token in expired:
+        sessions.pop(token, None)
 
 
 def _prune_login_attempts(bucket: list[datetime]) -> list[datetime]:
-    cutoff = datetime.utcnow() - timedelta(seconds=Config.LOGIN_WINDOW_SECONDS)
+    cutoff = UTCNOW() - timedelta(seconds=Config.LOGIN_WINDOW_SECONDS)
     return [attempt for attempt in bucket if attempt >= cutoff]
 
 
@@ -83,7 +102,7 @@ def _login_is_blocked(client_ip: str) -> bool:
 
 def _register_login_attempt(client_ip: str) -> None:
     attempts = login_attempts.get(client_ip, [])
-    attempts.append(datetime.utcnow())
+    attempts.append(UTCNOW())
     login_attempts[client_ip] = _prune_login_attempts(attempts)
 
 
@@ -92,6 +111,7 @@ def _reset_login_attempts(client_ip: str) -> None:
 
 
 def _require_admin(session_token: str | None) -> int | None:
+    _prune_sessions()
     if not session_token or session_token not in sessions:
         return None
     session_data = sessions[session_token]
@@ -99,6 +119,18 @@ def _require_admin(session_token: str | None) -> int | None:
         sessions.pop(session_token, None)
         return None
     return session_data["user_id"]
+
+
+def _generate_csrf_token(session_token: str) -> str:
+    """Generate a CSRF token tied to the user's session."""
+    secret = Config.PANEL_PASSWORD or "hatekadeh-csrf"
+    return sha256(f"{session_token}:{secret}".encode()).hexdigest()[:32]
+
+
+def _validate_csrf(session_token: str | None, csrf_token: str | None) -> bool:
+    if not session_token or not csrf_token:
+        return False
+    return secrets.compare_digest(csrf_token, _generate_csrf_token(session_token))
 
 
 def _hydrate_pending(msg: PendingMessage) -> PendingMessage:
@@ -132,6 +164,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     if user_id in Config.ADMIN_IDS and password == Config.PANEL_PASSWORD:
         _reset_login_attempts(client_ip)
         token = _create_session(user_id)
+        logger.info(f"ورود موفق ادمین - user_id: {user_id}, ip: {client_ip}")
         resp = RedirectResponse("/dashboard", status_code=303)
         resp.set_cookie(
             "session_token",
@@ -145,6 +178,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
         return resp
 
     _register_login_attempt(client_ip)
+    logger.warning(f"ورود ناموفق - user_id: {user_id}, ip: {client_ip}")
     return templates.TemplateResponse("login.html", {"request": request, "error": "اطلاعات نادرست"})
 
 @app.get("/logout")
@@ -171,6 +205,7 @@ async def dashboard(request: Request, session_token: str = Cookie(None)):
         recent_messages = [_hydrate_pending(msg) for msg in recent_messages]
     finally:
         db.close()
+    csrf_token = _generate_csrf_token(session_token or "")
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "total_pending": total_pending,
@@ -180,6 +215,7 @@ async def dashboard(request: Request, session_token: str = Cookie(None)):
         "pending_replies": pending_replies,
         "admin_id": admin_id,
         "recent_messages": recent_messages,
+        "csrf_token": csrf_token,
     })
 
 @app.get("/stats")
@@ -201,15 +237,28 @@ async def stats(session_token: str = Cookie(None)):
         db.close()
 
 @app.get("/pending", response_class=HTMLResponse)
-async def pending_messages(request: Request, session_token: str = Cookie(None)):
+async def pending_messages(request: Request, session_token: str = Cookie(None), page: int = 1):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return RedirectResponse("/")
+    per_page = 20
+    offset = (max(1, page) - 1) * per_page
+
+    def _get_pending_count(db):
+        return db.query(PendingMessage).filter_by(is_approved=False).count()
+
     def _get_pending(db):
-        return db.query(PendingMessage).filter_by(is_approved=False).order_by(PendingMessage.created_at.desc()).all()
+        return db.query(PendingMessage).filter_by(is_approved=False).order_by(PendingMessage.created_at.desc()).offset(offset).limit(per_page).all()
+
+    total = await run_db_task(_get_pending_count)
     messages = await run_db_task(_get_pending)
     messages = [_hydrate_pending(msg) for msg in messages]
-    return templates.TemplateResponse("pending_messages.html", {"request": request, "messages": messages})
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("pending_messages.html", {
+        "request": request, "messages": messages,
+        "page": page, "total_pages": total_pages, "total": total,
+        "csrf_token": _generate_csrf_token(session_token or ""),
+    })
 
 @app.get("/approved", response_class=HTMLResponse)
 async def approved_messages(request: Request, session_token: str = Cookie(None)):
@@ -262,10 +311,14 @@ async def reply_detail(request: Request, reply_id: int, session_token: str = Coo
 
 
 @app.post("/approve/{msg_id}")
-async def approve_message(msg_id: int, session_token: str = Cookie(None)):
+async def approve_message(msg_id: int, session_token: str = Cookie(None), request: Request = None):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    form = await request.form()
+    csrf_token = form.get("csrf_token", "")
+    if not _validate_csrf(session_token, csrf_token):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
     db = SessionLocal()
     try:
         def _get_msg(db):
@@ -293,10 +346,14 @@ async def approve_message(msg_id: int, session_token: str = Cookie(None)):
     return {"status": "ok"}
 
 @app.post("/reject/{msg_id}")
-async def reject_message(msg_id: int, session_token: str = Cookie(None)):
+async def reject_message(msg_id: int, session_token: str = Cookie(None), request: Request = None):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    form = await request.form()
+    csrf_token = form.get("csrf_token", "")
+    if not _validate_csrf(session_token, csrf_token):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
     db = SessionLocal()
     try:
         msg = db.query(PendingMessage).filter_by(id=msg_id).first()
@@ -308,22 +365,38 @@ async def reject_message(msg_id: int, session_token: str = Cookie(None)):
     return {"status": "ok"}
 
 @app.get("/replies", response_class=HTMLResponse)
-async def replies_list(request: Request, session_token: str = Cookie(None)):
+async def replies_list(request: Request, session_token: str = Cookie(None), page: int = 1):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return RedirectResponse("/")
+    per_page = 20
+    offset = (max(1, page) - 1) * per_page
+
+    def _get_replies_count(db):
+        return db.query(Reply).count()
+
     def _get_replies(db):
-        return db.query(Reply).order_by(Reply.created_at.desc()).all()
+        return db.query(Reply).order_by(Reply.created_at.desc()).offset(offset).limit(per_page).all()
+
+    total = await run_db_task(_get_replies_count)
     replies = await run_db_task(_get_replies)
     replies = [_hydrate_reply(reply) for reply in replies]
-    return templates.TemplateResponse("replies.html", {"request": request, "replies": replies})
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("replies.html", {
+        "request": request, "replies": replies,
+        "page": page, "total_pages": total_pages, "total": total,
+    })
 
 
 @app.post("/reply/approve/{reply_id}")
-async def approve_reply(reply_id: int, session_token: str = Cookie(None)):
+async def approve_reply(reply_id: int, session_token: str = Cookie(None), request: Request = None):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    form = await request.form()
+    csrf_token = form.get("csrf_token", "")
+    if not _validate_csrf(session_token, csrf_token):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
 
     db = SessionLocal()
     try:
@@ -355,10 +428,14 @@ async def approve_reply(reply_id: int, session_token: str = Cookie(None)):
 
 
 @app.post("/reply/reject/{reply_id}")
-async def reject_reply(reply_id: int, session_token: str = Cookie(None)):
+async def reject_reply(reply_id: int, session_token: str = Cookie(None), request: Request = None):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    form = await request.form()
+    csrf_token = form.get("csrf_token", "")
+    if not _validate_csrf(session_token, csrf_token):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
 
     db = SessionLocal()
     try:

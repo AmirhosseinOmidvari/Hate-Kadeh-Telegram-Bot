@@ -46,5 +46,41 @@
             </tbody>
         </table>
     </div>
+    {% if total_pages > 1 %}
+    <nav class="pagination">
+        {% if page > 1 %}
+        <a class="page-btn" href="?page={{ page - 1 }}">← قبلی</a>
+        {% endif %}
+        <span class="page-info">صفحه {{ page }} از {{ total_pages }} ({{ total }} پیام)</span>
+        {% if page < total_pages %}
+        <a class="page-btn" href="?page={{ page + 1 }}">بعدی →</a>
+        {% endif %}
+    </nav>
+    {% endif %}
 </section>
+
+<script>
+function approveMessage(id, btn) {
+    if (!confirm('آیا از تایید این پیام مطمئنی؟')) return;
+    fetch('/approve/' + id, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token={{ csrf_token }}'
+    }).then(r => r.json()).then(d => {
+        if (d.status === 'ok') { btn.closest('tr').remove(); showToast('پیام تایید شد ✅'); }
+        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
+    }).catch(() => showToast('خطا در ارتباط', 'error'));
+}
+function rejectMessage(id, btn) {
+    if (!confirm('آیا از حذف این پیام مطمئنی؟')) return;
+    fetch('/reject/' + id, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token={{ csrf_token }}'
+    }).then(r => r.json()).then(d => {
+        if (d.status === 'ok') { btn.closest('tr').remove(); showToast('پیام حذف شد ❌'); }
+        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
+    }).catch(() => showToast('خطا در ارتباط', 'error'));
+}
+</script>
 {% endblock %}

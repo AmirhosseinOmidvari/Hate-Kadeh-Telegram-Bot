@@ -3,7 +3,8 @@ from telegram.ext import ContextTypes, ConversationHandler
 from sqlalchemy import or_
 from bot.database import SessionLocal
 from bot.models import PendingMessage, Reply, ChannelMessage
-from bot.utils import logger
+from bot.config import Config
+from bot.utils import logger, is_rate_limited
 from bot.security import encrypt_value
 from bot.handlers.channel import build_reply_link
 
@@ -147,6 +148,7 @@ async def send_anonymous_callback(update: Update, context: ContextTypes.DEFAULT_
 async def back_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    context.user_data.pop("replying_to_channel_msg_id", None)
     await query.edit_message_text(
         _main_menu_text(query.from_user.first_name),
         reply_markup=_main_menu_keyboard(),
@@ -187,6 +189,10 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     msg = update.message
 
+    if is_rate_limited(user_id, window_seconds=float(Config.RATE_LIMIT), max_requests=3):
+        await update.message.reply_text("⏳ لطفاً کمی صبر کن. پیام‌هات با سرعت زیادی ارسال می‌شن.")
+        return SENDING_MESSAGE
+
     message_type = "text"
     file_id = None
     content = ""
@@ -210,6 +216,18 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_type = "voice"
         file_id = msg.voice.file_id
         content = "🎙 پیام صوتی"
+    elif msg.sticker:
+        message_type = "sticker"
+        file_id = msg.sticker.file_id
+        content = f"🎭 استیکر: {msg.sticker.emoji or ''}"
+    elif msg.animation:
+        message_type = "animation"
+        file_id = msg.animation.file_id
+        content = msg.caption.strip() if msg.caption else "🖼 گیف"
+    elif msg.video_note:
+        message_type = "video_note"
+        file_id = msg.video_note.file_id
+        content = "📹 ویدیوی دایره‌ای"
     else:
         await update.message.reply_text("❌ این نوع پیام پشتیبانی نمی‌شه.")
         return SENDING_MESSAGE
@@ -241,6 +259,11 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = update.effective_user.id
+
+        if is_rate_limited(user_id, window_seconds=float(Config.RATE_LIMIT), max_requests=3):
+            await update.message.reply_text("⏳ لطفاً کمی صبر کن. پیام‌هات با سرعت زیادی ارسال می‌شن.")
+            return WAITING_FOR_REPLY
+
         channel_msg_id = context.user_data.get("replying_to_channel_msg_id")
 
         if not channel_msg_id:
@@ -270,6 +293,18 @@ async def receive_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_type = "voice"
             file_id = msg.voice.file_id
             content = "🎙 پیام صوتی"
+        elif msg.sticker:
+            message_type = "sticker"
+            file_id = msg.sticker.file_id
+            content = f"🎭 استیکر: {msg.sticker.emoji or ''}"
+        elif msg.animation:
+            message_type = "animation"
+            file_id = msg.animation.file_id
+            content = msg.caption.strip() if msg.caption else "🖼 گیف"
+        elif msg.video_note:
+            message_type = "video_note"
+            file_id = msg.video_note.file_id
+            content = "📹 ویدیوی دایره‌ای"
         else:
             await update.message.reply_text("❌ این نوع پاسخ پشتیبانی نمی‌شه.")
             return WAITING_FOR_REPLY

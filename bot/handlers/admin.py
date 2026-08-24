@@ -4,6 +4,9 @@ from bot.config import Config
 from bot.database import SessionLocal
 from bot.models import PendingMessage, Reply
 from bot.utils import escape_markdown, format_tehran_datetime, is_admin, logger, now_tehran, truncate
+import logging
+
+security_logger = logging.getLogger("hatekadeh.security")
 from bot.handlers.channel import send_to_channel, send_reply_to_channel
 from bot.security import decrypt_value
 from datetime import datetime
@@ -46,6 +49,14 @@ async def _send_pending_preview(query, pending: PendingMessage) -> None:
         await query.message.reply_document(document=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
     elif pending.message_type == "voice" and file_id:
         await query.message.reply_voice(voice=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif pending.message_type == "sticker" and file_id:
+        await query.message.reply_sticker(sticker=file_id, reply_markup=keyboard)
+        await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif pending.message_type == "animation" and file_id:
+        await query.message.reply_animation(animation=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif pending.message_type == "video_note" and file_id:
+        await query.message.reply_video_note(video_note=file_id, reply_markup=keyboard)
+        await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
     else:
         await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
 
@@ -70,12 +81,21 @@ async def _send_reply_preview(query, reply: Reply) -> None:
         await query.message.reply_document(document=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
     elif reply.reply_type == "voice" and file_id:
         await query.message.reply_voice(voice=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif reply.reply_type == "sticker" and file_id:
+        await query.message.reply_sticker(sticker=file_id, reply_markup=keyboard)
+        await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif reply.reply_type == "animation" and file_id:
+        await query.message.reply_animation(animation=file_id, caption=caption, reply_markup=keyboard, parse_mode='Markdown')
+    elif reply.reply_type == "video_note" and file_id:
+        await query.message.reply_video_note(video_note=file_id, reply_markup=keyboard)
+        await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
     else:
         await query.message.reply_text(caption, reply_markup=keyboard, parse_mode='Markdown')
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not is_admin(user_id, Config.ADMIN_IDS):
+        security_logger.warning(f"تلاش غیرمجاز برای دسترسی به پنل ادمین - user_id: {user_id}")
         await update.message.reply_text("⛔ شما دسترسی به پنل مدیریت ندارید.")
         return
     keyboard = [
@@ -138,29 +158,43 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     pending_id = int(query.data.split('_')[1])
     db = SessionLocal()
-    pending = db.query(PendingMessage).filter_by(id=pending_id).first()
-    if not pending or pending.is_approved:
-        await query.edit_message_text("⚠️ پیام قبلاً تایید شده یا وجود ندارد.")
-        db.close()
-        return
-    channel_msg_id = await send_to_channel(pending, context.bot)
-    if channel_msg_id:
+    try:
+        pending = db.query(PendingMessage).filter_by(id=pending_id).first()
+        if not pending or pending.is_approved:
+            await query.edit_message_text("⚠️ پیام قبلاً تایید شده یا وجود ندارد.")
+            return
         pending.is_approved = True
         pending.approved_by = admin_id
         pending.approved_at = now_tehran()
-        pending.channel_message_id = channel_msg_id
         db.commit()
+    finally:
+        db.close()
+
+    channel_msg_id = await send_to_channel(pending, context.bot)
+    if channel_msg_id:
+        db2 = SessionLocal()
+        try:
+            db2.query(PendingMessage).filter_by(id=pending_id).update({"channel_message_id": channel_msg_id})
+            db2.commit()
+        finally:
+            db2.close()
         logger.info(f"پیام {pending_id} توسط ادمین {admin_id} تایید شد.")
         await _safe_result_message(query, f"✅ پیام {pending_id} تایید و در کانال منتشر شد.")
     else:
+        db3 = SessionLocal()
+        try:
+            db3.query(PendingMessage).filter_by(id=pending_id).update({"is_approved": False, "approved_by": None, "approved_at": None})
+            db3.commit()
+        finally:
+            db3.close()
         await _safe_result_message(query, "❌ خطا در ارسال به کانال. لطفاً دوباره تلاش کن.")
-    db.close()
 
 async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     admin_id = query.from_user.id
     if not is_admin(admin_id, Config.ADMIN_IDS):
+        security_logger.warning(f"تلاش غیرمجاز برای رد پیام - user_id: {admin_id}")
         await query.edit_message_text("⛔ دسترسی ندارید.")
         return
     pending_id = int(query.data.split('_')[1])
@@ -170,6 +204,7 @@ async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.delete(pending)
         db.commit()
         logger.info(f"پیام {pending_id} توسط ادمین {admin_id} حذف شد.")
+        security_logger.info(f"پیام حذف شد - pending_id: {pending_id}, admin: {admin_id}")
         await _safe_result_message(query, f"❌ پیام {pending_id} حذف شد.")
     else:
         await _safe_result_message(query, "⚠️ پیام پیدا نشد یا قبلاً تایید شده.")
@@ -212,24 +247,36 @@ async def approve_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_id = int(query.data.split('_')[2])
     db = SessionLocal()
-    reply = db.query(Reply).filter_by(id=reply_id).first()
-    if not reply or reply.is_approved:
-        await query.edit_message_text("⚠️ پاسخ قبلاً تایید شده یا وجود ندارد.")
-        db.close()
-        return
-
-    sent_message_id = await send_reply_to_channel(reply, context.bot)
-    if sent_message_id:
+    try:
+        reply = db.query(Reply).filter_by(id=reply_id).first()
+        if not reply or reply.is_approved:
+            await query.edit_message_text("⚠️ پاسخ قبلاً تایید شده یا وجود ندارد.")
+            return
         reply.is_approved = True
         reply.approved_by = admin_id
         reply.approved_at = now_tehran()
-        reply.bot_reply_msg_id = sent_message_id
         db.commit()
+    finally:
+        db.close()
+
+    sent_message_id = await send_reply_to_channel(reply, context.bot)
+    if sent_message_id:
+        db2 = SessionLocal()
+        try:
+            db2.query(Reply).filter_by(id=reply_id).update({"bot_reply_msg_id": sent_message_id})
+            db2.commit()
+        finally:
+            db2.close()
         logger.info(f"پاسخ {reply_id} توسط ادمین {admin_id} تایید شد.")
         await _safe_result_message(query, f"✅ پاسخ {reply_id} تایید و در کانال منتشر شد.")
     else:
+        db3 = SessionLocal()
+        try:
+            db3.query(Reply).filter_by(id=reply_id).update({"is_approved": False, "approved_by": None, "approved_at": None})
+            db3.commit()
+        finally:
+            db3.close()
         await _safe_result_message(query, "❌ خطا در ارسال پاسخ به کانال. لطفاً دوباره تلاش کن.")
-    db.close()
 
 
 async def reject_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -237,6 +284,7 @@ async def reject_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     admin_id = query.from_user.id
     if not is_admin(admin_id, Config.ADMIN_IDS):
+        security_logger.warning(f"تلاش غیرمجاز برای حذف پاسخ - user_id: {admin_id}")
         await query.edit_message_text("⛔ دسترسی ندارید.")
         return
 
@@ -247,6 +295,7 @@ async def reject_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.delete(reply)
         db.commit()
         logger.info(f"پاسخ {reply_id} توسط ادمین {admin_id} حذف شد.")
+        security_logger.info(f"پاسخ حذف شد - reply_id: {reply_id}, admin: {admin_id}")
         await _safe_result_message(query, f"❌ پاسخ {reply_id} حذف شد.")
     else:
         await _safe_result_message(query, "⚠️ پاسخ پیدا نشد یا قبلاً تایید شده.")

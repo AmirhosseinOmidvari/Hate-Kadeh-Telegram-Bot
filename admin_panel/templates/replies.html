@@ -44,5 +44,35 @@
             </tbody>
         </table>
     </div>
+    {% if total_pages > 1 %}
+    <nav class="pagination">
+        {% if page > 1 %}
+        <a class="page-btn" href="?page={{ page - 1 }}">← قبلی</a>
+        {% endif %}
+        <span class="page-info">صفحه {{ page }} از {{ total_pages }} ({{ total }} پاسخ)</span>
+        {% if page < total_pages %}
+        <a class="page-btn" href="?page={{ page + 1 }}">بعدی →</a>
+        {% endif %}
+    </nav>
+    {% endif %}
 </section>
+
+<script>
+function approveReply(id) {
+    if (!confirm('آیا از تایید این پاسخ مطمئنی؟')) return;
+    fetch('/reply/approve/' + id, { method: 'POST' })
+    .then(r => r.json()).then(d => {
+        if (d.status === 'ok') { location.reload(); }
+        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
+    }).catch(() => showToast('خطا در ارتباط', 'error'));
+}
+function rejectReply(id) {
+    if (!confirm('آیا از حذف این پاسخ مطمئنی؟')) return;
+    fetch('/reply/reject/' + id, { method: 'POST' })
+    .then(r => r.json()).then(d => {
+        if (d.status === 'ok') { location.reload(); }
+        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
+    }).catch(() => showToast('خطا در ارتباط', 'error'));
+}
+</script>
 {% endblock %}

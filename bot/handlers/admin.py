@@ -163,6 +163,11 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not pending or pending.is_approved:
             await query.edit_message_text("⚠️ پیام قبلاً تایید شده یا وجود ندارد.")
             return
+        # Store values before closing session
+        sender_id = pending.sender_id
+        msg_message_text = pending.message_text
+        msg_message_type = pending.message_type
+        msg_file_id = pending.file_id
         pending.is_approved = True
         pending.approved_by = admin_id
         pending.approved_at = now_tehran()
@@ -170,7 +175,17 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
-    channel_msg_id = await send_to_channel(pending, context.bot)
+    # Build a simple object with the needed fields for send_to_channel
+    class _PendingStub:
+        pass
+    stub = _PendingStub()
+    stub.id = pending_id
+    stub.sender_id = sender_id
+    stub.message_text = msg_message_text
+    stub.message_type = msg_message_type
+    stub.file_id = msg_file_id
+
+    channel_msg_id = await send_to_channel(stub, context.bot)
     if channel_msg_id:
         db2 = SessionLocal()
         try:
@@ -252,6 +267,12 @@ async def approve_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not reply or reply.is_approved:
             await query.edit_message_text("⚠️ پاسخ قبلاً تایید شده یا وجود ندارد.")
             return
+        # Store values before closing session
+        r_channel_msg_id = reply.channel_msg_id
+        r_replier_id = reply.replier_id
+        r_reply_text = reply.reply_text
+        r_reply_type = reply.reply_type
+        r_file_id = reply.file_id
         reply.is_approved = True
         reply.approved_by = admin_id
         reply.approved_at = now_tehran()
@@ -259,7 +280,17 @@ async def approve_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
-    sent_message_id = await send_reply_to_channel(reply, context.bot)
+    class _ReplyStub:
+        pass
+    stub = _ReplyStub()
+    stub.id = reply_id
+    stub.channel_msg_id = r_channel_msg_id
+    stub.replier_id = r_replier_id
+    stub.reply_text = r_reply_text
+    stub.reply_type = r_reply_type
+    stub.file_id = r_file_id
+
+    sent_message_id = await send_reply_to_channel(stub, context.bot)
     if sent_message_id:
         db2 = SessionLocal()
         try:

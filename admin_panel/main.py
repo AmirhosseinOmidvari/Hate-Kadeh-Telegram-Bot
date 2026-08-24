@@ -133,6 +133,20 @@ def _validate_csrf(session_token: str | None, csrf_token: str | None) -> bool:
     return secrets.compare_digest(csrf_token, _generate_csrf_token(session_token))
 
 
+async def _check_csrf(request: Request, session_token: str | None) -> JSONResponse | None:
+    """Validate CSRF from form body or X-CSRF-Token header. Returns None on success."""
+    csrf_token = None
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        form = await request.form()
+        csrf_token = form.get("csrf_token", "")
+    if not csrf_token:
+        csrf_token = request.headers.get("x-csrf-token", "")
+    if not _validate_csrf(session_token, csrf_token):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    return None
+
+
 def _hydrate_pending(msg: PendingMessage) -> PendingMessage:
     msg.message_text = decrypt_value(msg.message_text) or ""
     msg.file_id = decrypt_value(msg.file_id)
@@ -310,14 +324,13 @@ async def reply_detail(request: Request, reply_id: int, session_token: str = Coo
 
 
 @app.post("/approve/{msg_id}")
-async def approve_message(msg_id: int, session_token: str = Cookie(None), request: Request = None):
+async def approve_message(request: Request, msg_id: int, session_token: str = Cookie(None)):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    form = await request.form()
-    csrf_token = form.get("csrf_token", "")
-    if not _validate_csrf(session_token, csrf_token):
-        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    csrf_err = await _check_csrf(request, session_token)
+    if csrf_err:
+        return csrf_err
     db = SessionLocal()
     try:
         def _get_msg(db):
@@ -345,14 +358,13 @@ async def approve_message(msg_id: int, session_token: str = Cookie(None), reques
     return {"status": "ok"}
 
 @app.post("/reject/{msg_id}")
-async def reject_message(msg_id: int, session_token: str = Cookie(None), request: Request = None):
+async def reject_message(request: Request, msg_id: int, session_token: str = Cookie(None)):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    form = await request.form()
-    csrf_token = form.get("csrf_token", "")
-    if not _validate_csrf(session_token, csrf_token):
-        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    csrf_err = await _check_csrf(request, session_token)
+    if csrf_err:
+        return csrf_err
     db = SessionLocal()
     try:
         msg = db.query(PendingMessage).filter_by(id=msg_id).first()
@@ -384,18 +396,18 @@ async def replies_list(request: Request, session_token: str = Cookie(None), page
     return templates.TemplateResponse(request, "replies.html", {
         "replies": replies,
         "page": page, "total_pages": total_pages, "total": total,
+        "csrf_token": _generate_csrf_token(session_token or ""),
     })
 
 
 @app.post("/reply/approve/{reply_id}")
-async def approve_reply(reply_id: int, session_token: str = Cookie(None), request: Request = None):
+async def approve_reply(request: Request, reply_id: int, session_token: str = Cookie(None)):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    form = await request.form()
-    csrf_token = form.get("csrf_token", "")
-    if not _validate_csrf(session_token, csrf_token):
-        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    csrf_err = await _check_csrf(request, session_token)
+    if csrf_err:
+        return csrf_err
 
     db = SessionLocal()
     try:
@@ -427,14 +439,13 @@ async def approve_reply(reply_id: int, session_token: str = Cookie(None), reques
 
 
 @app.post("/reply/reject/{reply_id}")
-async def reject_reply(reply_id: int, session_token: str = Cookie(None), request: Request = None):
+async def reject_reply(request: Request, reply_id: int, session_token: str = Cookie(None)):
     admin_id = get_admin_id(session_token)
     if not admin_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    form = await request.form()
-    csrf_token = form.get("csrf_token", "")
-    if not _validate_csrf(session_token, csrf_token):
-        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    csrf_err = await _check_csrf(request, session_token)
+    if csrf_err:
+        return csrf_err
 
     db = SessionLocal()
     try:

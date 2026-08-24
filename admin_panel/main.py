@@ -149,17 +149,17 @@ def get_admin_id(session_token: str = Cookie(None)) -> int:
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 @app.post("/login")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     client_ip = request.client.host if request.client else "unknown"
     if _login_is_blocked(client_ip):
-        return templates.TemplateResponse("login.html", {"request": request, "error": "تعداد تلاش‌های ورود زیاد است. کمی بعد دوباره امتحان کن."})
+        return templates.TemplateResponse(request, "login.html", {"error": "تعداد تلاش‌های ورود زیاد است. کمی بعد دوباره امتحان کن."})
 
     if not username.isdigit():
         _register_login_attempt(client_ip)
-        return templates.TemplateResponse("login.html", {"request": request, "error": "نام کاربری باید آی‌دی عددی باشد"})
+        return templates.TemplateResponse(request, "login.html", {"error": "نام کاربری باید آی‌دی عددی باشد"})
     user_id = int(username)
     if user_id in Config.ADMIN_IDS and password == Config.PANEL_PASSWORD:
         _reset_login_attempts(client_ip)
@@ -179,7 +179,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
     _register_login_attempt(client_ip)
     logger.warning(f"ورود ناموفق - user_id: {user_id}, ip: {client_ip}")
-    return templates.TemplateResponse("login.html", {"request": request, "error": "اطلاعات نادرست"})
+    return templates.TemplateResponse(request, "login.html", {"error": "اطلاعات نادرست"})
 
 @app.get("/logout")
 async def logout(session_token: str = Cookie(None)):
@@ -206,8 +206,7 @@ async def dashboard(request: Request, session_token: str = Cookie(None)):
     finally:
         db.close()
     csrf_token = _generate_csrf_token(session_token or "")
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "total_pending": total_pending,
         "total_approved": total_approved,
         "total_users": total_users,
@@ -254,8 +253,8 @@ async def pending_messages(request: Request, session_token: str = Cookie(None), 
     messages = await run_db_task(_get_pending)
     messages = [_hydrate_pending(msg) for msg in messages]
     total_pages = max(1, (total + per_page - 1) // per_page)
-    return templates.TemplateResponse("pending_messages.html", {
-        "request": request, "messages": messages,
+    return templates.TemplateResponse(request, "pending_messages.html", {
+        "messages": messages,
         "page": page, "total_pages": total_pages, "total": total,
         "csrf_token": _generate_csrf_token(session_token or ""),
     })
@@ -271,7 +270,7 @@ async def approved_messages(request: Request, session_token: str = Cookie(None))
         messages = [_hydrate_pending(msg) for msg in messages]
     finally:
         db.close()
-    return templates.TemplateResponse("approved_messages.html", {"request": request, "messages": messages})
+    return templates.TemplateResponse(request, "approved_messages.html", {"messages": messages})
 
 @app.get("/message/{msg_id}", response_class=HTMLResponse)
 async def message_detail(request: Request, msg_id: int, session_token: str = Cookie(None)):
@@ -287,7 +286,7 @@ async def message_detail(request: Request, msg_id: int, session_token: str = Coo
         db.close()
     if not msg:
         return HTMLResponse("پیام پیدا نشد", status_code=404)
-    return templates.TemplateResponse("message_detail.html", {"request": request, "msg": msg})
+    return templates.TemplateResponse(request, "message_detail.html", {"msg": msg})
 
 
 @app.get("/reply/{reply_id}", response_class=HTMLResponse)
@@ -382,8 +381,8 @@ async def replies_list(request: Request, session_token: str = Cookie(None), page
     replies = await run_db_task(_get_replies)
     replies = [_hydrate_reply(reply) for reply in replies]
     total_pages = max(1, (total + per_page - 1) // per_page)
-    return templates.TemplateResponse("replies.html", {
-        "request": request, "replies": replies,
+    return templates.TemplateResponse(request, "replies.html", {
+        "replies": replies,
         "page": page, "total_pages": total_pages, "total": total,
     })
 

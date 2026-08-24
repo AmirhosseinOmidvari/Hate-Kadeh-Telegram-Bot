@@ -9,9 +9,22 @@ function showMessage(msg, isError = false) {
     setTimeout(() => toast.remove(), 2800);
 }
 
+function _csrfHeaders() {
+    return window.CSRF_TOKEN ? { 'X-CSRF-Token': window.CSRF_TOKEN } : {};
+}
+
+function _postOptions() {
+    return {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: _csrfHeaders()
+    };
+}
+
 async function approveMessage(id, element) {
+    if (!confirm('آیا از تایید این پیام مطمئنی؟')) return;
     try {
-        const res = await fetch(`${API_BASE}/approve/${id}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/approve/${id}`, _postOptions());
         const data = await res.json().catch(() => ({}));
         if (data.status === 'ok') {
             showMessage(`✅ پیام ${id} تایید شد`);
@@ -32,7 +45,7 @@ async function approveMessage(id, element) {
 async function rejectMessage(id, element) {
     if (!confirm('آیا از حذف این پیام اطمینان دارید؟')) return;
     try {
-        const res = await fetch(`${API_BASE}/reject/${id}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/reject/${id}`, _postOptions());
         const data = await res.json().catch(() => ({}));
         if (data.status === 'ok') {
             showMessage(`🗑 پیام ${id} حذف شد`);
@@ -63,7 +76,7 @@ function filterTable(inputId, tableId) {
 
 async function refreshStats() {
     try {
-        const res = await fetch(`${API_BASE}/stats`);
+        const res = await fetch(`${API_BASE}/stats`, { credentials: 'same-origin' });
         const stats = await res.json().catch(() => null);
         if (!stats) return;
         document.querySelectorAll('.stat-number').forEach(el => {
@@ -74,8 +87,9 @@ async function refreshStats() {
 }
 
 async function approveReply(id) {
+    if (!confirm('آیا از تایید این پاسخ مطمئنی؟')) return;
     try {
-        const res = await fetch(`${API_BASE}/reply/approve/${id}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/reply/approve/${id}`, _postOptions());
         const data = await res.json().catch(() => ({}));
         if (data.status === 'ok') {
             showMessage(`✅ پاسخ ${id} تایید شد`);
@@ -89,7 +103,7 @@ async function approveReply(id) {
 async function rejectReply(id) {
     if (!confirm('آیا از حذف این پاسخ اطمینان دارید؟')) return;
     try {
-        const res = await fetch(`${API_BASE}/reply/reject/${id}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/reply/reject/${id}`, _postOptions());
         const data = await res.json().catch(() => ({}));
         if (data.status === 'ok') {
             showMessage(`🗑 پاسخ ${id} حذف شد`);

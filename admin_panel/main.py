@@ -300,7 +300,10 @@ async def message_detail(request: Request, msg_id: int, session_token: str = Coo
         db.close()
     if not msg:
         return HTMLResponse("پیام پیدا نشد", status_code=404)
-    return templates.TemplateResponse(request, "message_detail.html", {"msg": msg})
+    return templates.TemplateResponse(request, "message_detail.html", {
+        "msg": msg,
+        "csrf_token": _generate_csrf_token(session_token or ""),
+    })
 
 
 @app.get("/reply/{reply_id}", response_class=HTMLResponse)

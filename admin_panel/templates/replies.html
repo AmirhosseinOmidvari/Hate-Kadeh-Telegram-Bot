@@ -56,30 +56,4 @@
     </nav>
     {% endif %}
 </section>
-
-<script>
-var CSRF_TOKEN = '{{ csrf_token }}';
-function approveReply(id) {
-    if (!confirm('آیا از تایید این پاسخ مطمئنی؟')) return;
-    fetch('/reply/approve/' + id, {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': CSRF_TOKEN }
-    })
-    .then(r => r.json()).then(d => {
-        if (d.status === 'ok') { location.reload(); }
-        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
-    }).catch(() => showToast('خطا در ارتباط', 'error'));
-}
-function rejectReply(id) {
-    if (!confirm('آیا از حذف این پاسخ مطمئنی؟')) return;
-    fetch('/reply/reject/' + id, {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': CSRF_TOKEN }
-    })
-    .then(r => r.json()).then(d => {
-        if (d.status === 'ok') { location.reload(); }
-        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
-    }).catch(() => showToast('خطا در ارتباط', 'error'));
-}
-</script>
 {% endblock %}

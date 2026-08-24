@@ -58,28 +58,4 @@
     </nav>
     {% endif %}
 </section>
-
-<script>
-var CSRF_TOKEN = '{{ csrf_token }}';
-function approveMessage(id, btn) {
-    if (!confirm('آیا از تایید این پیام مطمئنی؟')) return;
-    fetch('/approve/' + id, {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': CSRF_TOKEN }
-    }).then(r => r.json()).then(d => {
-        if (d.status === 'ok') { btn.closest('tr').remove(); showToast('پیام تایید شد ✅'); }
-        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
-    }).catch(() => showToast('خطا در ارتباط', 'error'));
-}
-function rejectMessage(id, btn) {
-    if (!confirm('آیا از حذف این پیام مطمئنی؟')) return;
-    fetch('/reject/' + id, {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': CSRF_TOKEN }
-    }).then(r => r.json()).then(d => {
-        if (d.status === 'ok') { btn.closest('tr').remove(); showToast('پیام حذف شد ❌'); }
-        else showToast('خطا: ' + (d.error || 'unknown'), 'error');
-    }).catch(() => showToast('خطا در ارتباط', 'error'));
-}
-</script>
 {% endblock %}

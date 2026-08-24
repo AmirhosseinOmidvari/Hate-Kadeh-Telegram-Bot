@@ -47,6 +47,7 @@
         </div>
     </div>
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
+    <script>window.CSRF_TOKEN = '{{ csrf_token | default('') }}';</script>
     <script src="/static/script.js"></script>
     {% block scripts %}{% endblock %}
 </body>
